@@ -415,7 +415,9 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
             </div>
           )}
 
-          <div className="input-group" style={{ marginTop: '0.5rem' }}>
+          {(!showSettings && !showHistory) && (
+            <>
+              <div className="input-group" style={{ marginTop: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
               <label style={{ fontSize: '1.1rem', color: 'var(--text-main)', margin: 0 }}>What do you want to create?</label>
               <select 
@@ -659,6 +661,8 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 </button>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
 
