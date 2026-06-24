@@ -318,7 +318,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
         // Check if the API explicitly told us how long to wait
         const retryMatch = errMsg.match(/retry in ([\d\.]+)s/);
         if (retryMatch && retryMatch[1]) {
-          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1000; // Add 1s buffer
+          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 5000; // Add 5s safe buffer
         } else if (!errMsg.includes('quota') && !errMsg.includes('429')) {
           waitMs = Math.pow(2, retryCount) * 1000; // Exponential backoff for non-quota errors
         }
