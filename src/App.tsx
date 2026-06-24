@@ -54,6 +54,8 @@ const RANDOM_IDEAS = {
 
 function App() {
   const [apiKey, setApiKey] = useState('');
+  const [openRouterKey, setOpenRouterKey] = useState('');
+  const [apiProvider, setApiProvider] = useState<'google' | 'openrouter'>('google');
   const [showSettings, setShowSettings] = useState(false);
   const [inputPrompt, setInputPrompt] = useState('');
   const [generatedPrompt, setGeneratedPrompt] = useState('');
@@ -89,8 +91,14 @@ function App() {
 
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key');
+    const savedOrKey = localStorage.getItem('openrouter_api_key');
+    const savedProvider = localStorage.getItem('api_provider');
+    
     if (savedKey) setApiKey(savedKey);
-    else setShowSettings(true);
+    if (savedOrKey) setOpenRouterKey(savedOrKey);
+    if (savedProvider) setApiProvider(savedProvider as 'google' | 'openrouter');
+    
+    if (!savedKey && !savedOrKey) setShowSettings(true);
 
     const savedHistory = localStorage.getItem('prompt_history');
     if (savedHistory) {
@@ -101,8 +109,18 @@ function App() {
   }, []);
 
   const saveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('gemini_api_key', key);
+    if (apiProvider === 'google') {
+      setApiKey(key);
+      localStorage.setItem('gemini_api_key', key);
+    } else {
+      setOpenRouterKey(key);
+      localStorage.setItem('openrouter_api_key', key);
+    }
+  };
+
+  const handleProviderChange = (provider: 'google' | 'openrouter') => {
+    setApiProvider(provider);
+    localStorage.setItem('api_provider', provider);
   };
 
   const saveHistory = (newHistory: HistoryItem[]) => {
@@ -212,8 +230,13 @@ function App() {
   };
 
   const executeGeneration = async (promptText: string, stylesToUse: string[], retryCount = 0) => {
-    if (!apiKey) {
+    if (apiProvider === 'google' && !apiKey) {
       alert('Please set your Gemini API key first!');
+      setShowSettings(true);
+      return;
+    }
+    if (apiProvider === 'openrouter' && !openRouterKey) {
+      alert('Please set your OpenRouter API key first!');
       setShowSettings(true);
       return;
     }
@@ -225,8 +248,6 @@ function App() {
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      
       let categoryInstruction = '';
       if (activeCategory === 'Coding') {
         categoryInstruction = 'Format the prompt specifically for generating robust, production-ready code. Emphasize tech stack, edge cases, error handling, performance constraints, and clear structural requirements.';
@@ -270,23 +291,58 @@ ${extraContext}
 If an image or document is provided, use its contents to inspire and flesh out the specific details.
 Do not include any pleasantries or conversational filler. Output ONLY the generated prompt.`;
 
-      let contents: any[] = [];
-      if (promptText.trim()) contents.push(promptText);
-      if (imageFile) {
-        const documentPart = await fileToGenerativePart(imageFile);
-        contents.push(documentPart);
-      }
+      let resultText = '';
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: contents,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.8,
+      if (apiProvider === 'google') {
+        const ai = new GoogleGenAI({ apiKey });
+        let contents: any[] = [];
+        if (promptText.trim()) contents.push(promptText);
+        if (imageFile) {
+          const documentPart = await fileToGenerativePart(imageFile);
+          contents.push(documentPart);
         }
-      });
 
-      const resultText = response.text || 'Failed to generate prompt.';
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: contents,
+          config: {
+            systemInstruction: systemInstruction,
+            temperature: 0.8,
+          }
+        });
+        resultText = response.text || 'Failed to generate prompt.';
+      } else {
+        // OpenRouter Fallback
+        if (imageFile) {
+          throw new Error("Image uploads are not currently supported when using the free OpenRouter API. Please switch back to Google Gemini in Settings to upload images, or remove the image.");
+        }
+        
+        const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openRouterKey}`,
+            'HTTP-Referer': window.location.href, // Required by OpenRouter
+            'X-Title': 'PromptCrafter', // Required by OpenRouter
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash:free',
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: promptText }
+            ],
+            temperature: 0.8
+          })
+        });
+
+        if (!openRouterResponse.ok) {
+          const errorData = await openRouterResponse.json();
+          throw new Error(errorData?.error?.message || `OpenRouter Error: ${openRouterResponse.status}`);
+        }
+
+        const data = await openRouterResponse.json();
+        resultText = data.choices?.[0]?.message?.content || 'Failed to generate prompt via OpenRouter.';
+      }
       setGeneratedPrompt(resultText);
 
       if (retryCount === 0) {
@@ -416,14 +472,38 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
           {showSettings && (
             <div className="settings-panel">
+              <div className="input-group" style={{ marginBottom: '1rem' }}>
+                <label>API Provider</label>
+                <select 
+                  value={apiProvider}
+                  onChange={(e) => handleProviderChange(e.target.value as 'google' | 'openrouter')}
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--panel-border)',
+                    background: '#f9fafb',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <option value="google">Google Gemini (Official)</option>
+                  <option value="openrouter">OpenRouter (Free Bypass)</option>
+                </select>
+              </div>
+
               <div className="input-group">
-                <label>Gemini API Key</label>
+                <label>{apiProvider === 'google' ? 'Gemini API Key' : 'OpenRouter API Key'}</label>
                 <input 
                   type="password" 
-                  value={apiKey}
+                  value={apiProvider === 'google' ? apiKey : openRouterKey}
                   onChange={(e) => saveApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder={apiProvider === 'google' ? "AIzaSy..." : "sk-or-v1-..."}
                 />
+                {apiProvider === 'openrouter' && (
+                  <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                    Get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>openrouter.ai/keys</a>. Note: Image uploads are disabled on free OpenRouter models.
+                  </p>
+                )}
               </div>
             </div>
           )}
