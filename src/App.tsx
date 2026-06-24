@@ -373,17 +373,17 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
         
         const retryMatch = errMsg.match(/retry in ([\d\.]+)s/);
         if (retryMatch && retryMatch[1]) {
-          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 2000;
+          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 5000; // Add 5 second buffer
         }
 
         const targetTimeMs = Date.now() + waitMs;
         let initialSeconds = Math.ceil(waitMs / 1000);
-        setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${initialSeconds}s before trying again.`);
+        setGeneratedPrompt(`⏳ Waiting ${initialSeconds}s... (Reason: ${errMsg})`);
         
         const countdownInterval = setInterval(() => {
           const remainingSeconds = Math.ceil((targetTimeMs - Date.now()) / 1000);
           if (remainingSeconds > 0) {
-            setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${remainingSeconds}s before trying again.`);
+            setGeneratedPrompt(`⏳ Waiting ${remainingSeconds}s... (Reason: ${errMsg})`);
           } else {
             clearInterval(countdownInterval);
             setGeneratedPrompt('✨ Cooldown finished! You can click Generate Prompt again.');
