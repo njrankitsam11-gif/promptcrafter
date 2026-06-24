@@ -326,7 +326,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-flash:free',
+            model: 'google/gemini-2.0-flash-exp:free',
             messages: [
               { role: 'system', content: systemInstruction },
               { role: 'user', content: promptText }
