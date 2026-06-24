@@ -320,13 +320,14 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 2000;
         }
 
-        let secondsRemaining = Math.ceil(waitMs / 1000);
-        setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${secondsRemaining}s before trying again.`);
+        const targetTimeMs = Date.now() + waitMs;
+        let initialSeconds = Math.ceil(waitMs / 1000);
+        setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${initialSeconds}s before trying again.`);
         
         const countdownInterval = setInterval(() => {
-          secondsRemaining--;
-          if (secondsRemaining > 0) {
-            setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${secondsRemaining}s before trying again.`);
+          const remainingSeconds = Math.ceil((targetTimeMs - Date.now()) / 1000);
+          if (remainingSeconds > 0) {
+            setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${remainingSeconds}s before trying again.`);
           } else {
             clearInterval(countdownInterval);
             setGeneratedPrompt('✨ Cooldown finished! You can click Generate Prompt again.');
