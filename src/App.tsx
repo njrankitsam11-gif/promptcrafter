@@ -371,9 +371,14 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
       if (isTempError) {
         let waitMs = 60000; // Default 60s cooldown
         
-        const retryMatch = errMsg.match(/retry in ([\d\.]+)s/);
+        const retryMatch = errMsg.match(/retry in ([\d\.]+)(m?s)/);
         if (retryMatch && retryMatch[1]) {
-          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 5000; // Add 5 second buffer
+          const val = parseFloat(retryMatch[1]);
+          if (retryMatch[2] === 'ms') {
+            waitMs = Math.ceil(val) + 2000; // 2 sec buffer
+          } else {
+            waitMs = Math.ceil(val * 1000) + 2000; // 2 sec buffer
+          }
         }
 
         const targetTimeMs = Date.now() + waitMs;
