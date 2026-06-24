@@ -377,7 +377,20 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
   };
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ paddingTop: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <div className="panel-header" style={{ borderBottom: 'none', padding: 0, marginBottom: 0 }}>
+          <button className="icon-btn" onClick={() => setShowHistory(!showHistory)} title="Toggle History">
+            <HistoryIcon size={18} />
+            <span className="btn-label">History</span>
+          </button>
+          <button className="icon-btn" onClick={() => setShowSettings(!showSettings)} title="Settings">
+            <Settings size={18} />
+            <span className="btn-label">Settings</span>
+          </button>
+        </div>
+      </div>
+
       <header className="header">
         <h1 
           className="title" 
@@ -392,16 +405,6 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
       <div className="main-layout">
         <div className="glass-panel main-panel">
-          <div className="panel-header">
-            <button className="icon-btn" onClick={() => setShowHistory(!showHistory)} title="Toggle History">
-              <HistoryIcon size={18} />
-              <span className="btn-label">History</span>
-            </button>
-            <button className="icon-btn" onClick={() => setShowSettings(!showSettings)} title="Settings">
-              <Settings size={18} />
-              <span className="btn-label">Settings</span>
-            </button>
-          </div>
 
           {showSettings && (
             <div className="settings-panel">
