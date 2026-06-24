@@ -312,13 +312,15 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
       
       let isTempError = errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429') || errMsg.includes('quota');
       
-      if (isTempError && retryCount < 3) {
-        let waitMs = Math.pow(2, retryCount) * 1000;
+      if (isTempError && retryCount < 5) {
+        let waitMs = 15000; // Default 15s wait for quota limits
         
         // Check if the API explicitly told us how long to wait
-        const retryMatch = errMsg.match(/Please retry in ([\d\.]+)s/);
+        const retryMatch = errMsg.match(/retry in ([\d\.]+)s/);
         if (retryMatch && retryMatch[1]) {
           waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1000; // Add 1s buffer
+        } else if (!errMsg.includes('quota') && !errMsg.includes('429')) {
+          waitMs = Math.pow(2, retryCount) * 1000; // Exponential backoff for non-quota errors
         }
 
         let secondsRemaining = Math.ceil(waitMs / 1000);
@@ -339,7 +341,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
         }, waitMs);
       } else {
         if (isTempError) {
-          setGeneratedPrompt('⚠️ Google Gemini API is currently experiencing extreme demand. Please try again later.');
+          setGeneratedPrompt(`⚠️ Google Gemini API is currently experiencing extreme demand. (${errMsg})`);
         } else {
           setGeneratedPrompt(`Error: ${errMsg}`);
         }
