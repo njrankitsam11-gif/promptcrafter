@@ -312,40 +312,30 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
       
       let isTempError = errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429') || errMsg.includes('quota');
       
-      if (isTempError && retryCount < 5) {
-        let waitMs = 15000; // Default 15s wait for quota limits
+      if (isTempError) {
+        let waitMs = 60000; // Default 60s cooldown
         
-        // Check if the API explicitly told us how long to wait
         const retryMatch = errMsg.match(/retry in ([\d\.]+)s/);
         if (retryMatch && retryMatch[1]) {
-          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 5000; // Add 5s safe buffer
-        } else if (!errMsg.includes('quota') && !errMsg.includes('429')) {
-          waitMs = Math.pow(2, retryCount) * 1000; // Exponential backoff for non-quota errors
+          waitMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 2000;
         }
 
-        const targetTimeMs = Date.now() + waitMs;
-        let initialSeconds = Math.ceil(waitMs / 1000);
-        setGeneratedPrompt(`⏳ Free-tier speed limit active. Auto-retrying in ${initialSeconds}s...`);
+        let secondsRemaining = Math.ceil(waitMs / 1000);
+        setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${secondsRemaining}s before trying again.`);
         
         const countdownInterval = setInterval(() => {
-          const remainingSeconds = Math.ceil((targetTimeMs - Date.now()) / 1000);
-          if (remainingSeconds > 0) {
-            setGeneratedPrompt(`⏳ Free-tier speed limit active. Auto-retrying in ${remainingSeconds}s...`);
+          secondsRemaining--;
+          if (secondsRemaining > 0) {
+            setGeneratedPrompt(`⏳ Free-tier speed limit active. Please wait ${secondsRemaining}s before trying again.`);
           } else {
             clearInterval(countdownInterval);
+            setGeneratedPrompt('✨ Cooldown finished! You can click Generate Prompt again.');
+            setIsLoading(false); // Re-enable the button
           }
         }, 1000);
 
-        setTimeout(() => {
-          clearInterval(countdownInterval);
-          executeGeneration(promptText, stylesToUse, retryCount + 1);
-        }, waitMs);
       } else {
-        if (isTempError) {
-          setGeneratedPrompt(`⚠️ Google Gemini API is currently experiencing extreme demand. (${errMsg})`);
-        } else {
-          setGeneratedPrompt(`Error: ${errMsg}`);
-        }
+        setGeneratedPrompt(`Error: ${errMsg}`);
         setIsLoading(false);
       }
     }
