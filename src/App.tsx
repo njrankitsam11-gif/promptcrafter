@@ -323,13 +323,14 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           waitMs = Math.pow(2, retryCount) * 1000; // Exponential backoff for non-quota errors
         }
 
-        let secondsRemaining = Math.ceil(waitMs / 1000);
-        setGeneratedPrompt(`⏳ Free-tier speed limit active. Auto-retrying in ${secondsRemaining}s...`);
+        const targetTimeMs = Date.now() + waitMs;
+        let initialSeconds = Math.ceil(waitMs / 1000);
+        setGeneratedPrompt(`⏳ Free-tier speed limit active. Auto-retrying in ${initialSeconds}s...`);
         
         const countdownInterval = setInterval(() => {
-          secondsRemaining--;
-          if (secondsRemaining > 0) {
-            setGeneratedPrompt(`⏳ Free-tier speed limit active. Auto-retrying in ${secondsRemaining}s...`);
+          const remainingSeconds = Math.ceil((targetTimeMs - Date.now()) / 1000);
+          if (remainingSeconds > 0) {
+            setGeneratedPrompt(`⏳ Free-tier speed limit active. Auto-retrying in ${remainingSeconds}s...`);
           } else {
             clearInterval(countdownInterval);
           }
