@@ -219,9 +219,9 @@ function App() {
     }
     if (!promptText.trim() && !imageFile && !scrapedContext && trendingContext.length === 0) return;
 
+    setGeneratedPrompt('');
     if (retryCount === 0) {
       setIsLoading(true);
-      setGeneratedPrompt('');
     }
 
     try {
@@ -674,9 +674,9 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           {(generatedPrompt || isLoading) && (
             <div className="output-box fade-in">
               <div className="output-content">
-                {isLoading ? 'Crafting your legendary prompt...' : generatedPrompt}
+                {(isLoading && !generatedPrompt.includes('⏳')) ? 'Crafting your legendary prompt...' : generatedPrompt}
               </div>
-              {!isLoading && generatedPrompt && (
+              {!isLoading && generatedPrompt && !generatedPrompt.includes('⏳') && (
                 <button className="copy-btn" onClick={() => copyToClipboard(generatedPrompt)} title="Copy to clipboard">
                   {copied ? <Check size={18} color="#4ade80" /> : <Copy size={18} />}
                 </button>
