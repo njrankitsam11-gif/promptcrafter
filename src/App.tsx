@@ -15,33 +15,37 @@ const STYLE_CATEGORIES = {
   Visual: [
     {
       category: 'Artistic Styles',
-      options: ['Cyberpunk', 'Anime', 'Watercolor', 'Oil Painting', 'Minimalist', 'Retro 80s']
+      options: ['Cyberpunk', 'Anime', 'Watercolor', 'Oil Painting', 'Minimalist', 'Retro 80s', 'Steampunk', 'Concept Art']
     },
     {
       category: 'Photography/Camera',
-      options: ['Cinematic', 'Photorealistic', 'Macro Photography', 'Drone/Aerial', 'Polaroid', 'Studio Lighting']
+      options: ['Cinematic', 'Photorealistic', 'Macro Photography', 'Drone/Aerial', 'Polaroid', 'Studio Lighting', '35mm Film', 'Fisheye Lens']
+    },
+    {
+      category: 'Lighting & Rendering',
+      options: ['Volumetric Lighting', 'Bioluminescence', 'Neon Glow', 'Golden Hour', 'Unreal Engine 5', 'Octane Render', 'Ray Tracing']
     },
     {
       category: 'Mood/Tone',
-      options: ['Dark Fantasy', 'Whimsical', 'Ethereal', 'Gritty/Noir', 'Utopian', 'Surreal']
+      options: ['Dark Fantasy', 'Whimsical', 'Ethereal', 'Gritty/Noir', 'Utopian', 'Surreal', 'Liminal Space']
     }
   ],
   Text: [
     {
-      category: 'Engineering & IT',
-      options: ['Software Developer', 'Data Analyst', 'Cloud Architect', 'QA Tester', 'Prompt Engineer']
+      category: 'Roles & Personas',
+      options: ['Software Architect', 'Data Scientist', 'Marketing Strategist', 'Legal Advisor', 'Creative Novelist', 'UX Researcher', 'Financial Analyst']
     },
     {
-      category: 'Business & Marketing',
-      options: ['Product Manager', 'SEO Specialist', 'Copywriter', 'Marketing Strategist', 'Sales Executive']
+      category: 'Frameworks & Theories',
+      options: ['SOLID Principles', 'Hero\'s Journey', 'AIDA Marketing', 'First Principles Thinking', 'Design Thinking', 'Agile/Scrum', 'Socratic Method']
     },
     {
-      category: 'Creative & Content',
-      options: ['Content Writer', 'Novelist', 'Screenwriter', 'Editor', 'UX Writer']
+      category: 'Output Formats',
+      options: ['JSON Object', 'Mermaid Diagram', 'Markdown Table', 'LaTeX Math', 'Step-by-Step Guide', 'SWOT Analysis', 'React Component']
     },
     {
-      category: 'Professional Services',
-      options: ['Legal Advisor', 'Financial Analyst', 'HR/Recruiter', 'Educator', 'Management Consultant']
+      category: 'Voice & Tone',
+      options: ['Academic/Rigorous', 'Witty & Sarcastic', 'Empathic & Warm', 'Concise/Executive', 'Persuasive', 'Satirical']
     }
   ]
 };
@@ -205,7 +209,7 @@ function App() {
       
       const timer = setTimeout(async () => {
         try {
-          const sysPrompt = `You are an autocomplete engine for a prompt generator tool. The user is in the '${activeCategory}' category. They started typing: '${inputPrompt}'. Generate 3 short, creative ways to complete their thought as a prompt idea. Reply ONLY with a JSON array of 3 strings. Example: ["Develop a python script", "Create a react component", "Build a mobile app"]`;
+          const sysPrompt = `You are an AI Co-Pilot for a prompt generator. The user is in the '${activeCategory}' category. They typed: '${inputPrompt}'. Generate 3 highly creative, out-of-the-box, lateral-thinking ways to finish their thought. Don't just finish the sentence predictably; give them an incredible idea they haven't thought of. Reply ONLY with a JSON array of 3 strings. Example: ["Develop a python script that uses ML to predict the stock market", "Create a react component with a 3D WebGL particle system", "Build a mobile app for tracking lucid dreams"]`;
           
           let aiResponse = '';
           
@@ -446,8 +450,9 @@ function App() {
         extraContext += `\n\nTRENDING NEWS CONTEXT (Incorporate these current events into the prompt):\n${trendingContext.map((t, i) => `${i+1}. ${t}`).join('\n')}`;
       }
 
-      const systemInstruction = `You are a legendary, world-class prompt engineer. 
+      const systemInstruction = `You are a legendary, world-class prompt engineer and domain expert. 
 Your task is to take a simple, short sentence (and optionally an image reference, document, or web context) and transform it into an incredibly detailed, highly specific, and creative prompt.
+CRITICAL INSTRUCTION: Analyze the core topic of the user's input and automatically inject deep domain knowledge, expert terminology, industry best practices, and advanced creative frameworks into the final prompt to elevate it from a basic request to a masterclass prompt.
 ${categoryInstruction}
 ${platformInstruction}
 ${stylesInstruction}
