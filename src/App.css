@@ -51,23 +51,11 @@
 }
 
 .title {
-  font-size: 3.5rem;
-  font-weight: 800;
+  font-size: 2.5rem;
+  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.03em;
-  background: linear-gradient(135deg, #111827 0%, #4F46E5 50%, #111827 100%);
-  background-size: 200% auto;
-  color: transparent;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: gradientFlow 6s ease infinite;
-  text-shadow: 0 4px 24px rgba(79, 70, 229, 0.15);
-}
-
-@keyframes gradientFlow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  color: var(--text-main);
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
