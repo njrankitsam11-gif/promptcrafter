@@ -55,7 +55,9 @@ const RANDOM_IDEAS = {
 function App() {
   const [apiKey, setApiKey] = useState('');
   const [openRouterKey, setOpenRouterKey] = useState('');
-  const [apiProvider, setApiProvider] = useState<'google' | 'openrouter'>('google');
+  const [groqKey, setGroqKey] = useState('');
+  const [apiProvider, setApiProvider] = useState<'google' | 'openrouter' | 'groq'>('google');
+  const [openRouterModel, setOpenRouterModel] = useState('openrouter/free');
   const [showSettings, setShowSettings] = useState(false);
   const [inputPrompt, setInputPrompt] = useState('');
   const [generatedPrompt, setGeneratedPrompt] = useState('');
@@ -92,13 +94,17 @@ function App() {
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key');
     const savedOrKey = localStorage.getItem('openrouter_api_key');
+    const savedGroqKey = localStorage.getItem('groq_api_key');
     const savedProvider = localStorage.getItem('api_provider');
+    const savedOrModel = localStorage.getItem('openrouter_model');
     
     if (savedKey) setApiKey(savedKey);
     if (savedOrKey) setOpenRouterKey(savedOrKey);
-    if (savedProvider) setApiProvider(savedProvider as 'google' | 'openrouter');
+    if (savedGroqKey) setGroqKey(savedGroqKey);
+    if (savedProvider) setApiProvider(savedProvider as 'google' | 'openrouter' | 'groq');
+    if (savedOrModel) setOpenRouterModel(savedOrModel);
     
-    if (!savedKey && !savedOrKey) setShowSettings(true);
+    if (!savedKey && !savedOrKey && !savedGroqKey) setShowSettings(true);
 
     const savedHistory = localStorage.getItem('prompt_history');
     if (savedHistory) {
@@ -112,15 +118,23 @@ function App() {
     if (apiProvider === 'google') {
       setApiKey(key);
       localStorage.setItem('gemini_api_key', key);
-    } else {
+    } else if (apiProvider === 'openrouter') {
       setOpenRouterKey(key);
       localStorage.setItem('openrouter_api_key', key);
+    } else {
+      setGroqKey(key);
+      localStorage.setItem('groq_api_key', key);
     }
   };
 
-  const handleProviderChange = (provider: 'google' | 'openrouter') => {
+  const handleProviderChange = (provider: 'google' | 'openrouter' | 'groq') => {
     setApiProvider(provider);
     localStorage.setItem('api_provider', provider);
+  };
+
+  const handleModelChange = (model: string) => {
+    setOpenRouterModel(model);
+    localStorage.setItem('openrouter_model', model);
   };
 
   const saveHistory = (newHistory: HistoryItem[]) => {
@@ -311,10 +325,41 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           }
         });
         resultText = response.text || 'Failed to generate prompt.';
+      } else if (apiProvider === 'groq') {
+        if (imageFile) {
+          throw new Error("Image uploads are not currently supported when using Groq. Please switch back to Google Gemini in Settings to upload images, or remove the image.");
+        }
+        if (!groqKey) {
+          throw new Error("Please set your Groq API key in Settings first.");
+        }
+        
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: promptText }
+            ],
+            temperature: 0.8
+          })
+        });
+
+        if (!groqResponse.ok) {
+          const errorData = await groqResponse.json();
+          throw new Error(errorData?.error?.message || `Groq Error: ${groqResponse.status}`);
+        }
+
+        const data = await groqResponse.json();
+        resultText = data.choices?.[0]?.message?.content || 'Failed to generate prompt via Groq.';
       } else {
         // OpenRouter Fallback
         if (imageFile) {
-          throw new Error("Image uploads are not currently supported when using the free OpenRouter API. Please switch back to Google Gemini in Settings to upload images, or remove the image.");
+          throw new Error("Image uploads are not currently supported when using OpenRouter. Please switch back to Google Gemini in Settings to upload images, or remove the image.");
         }
         
         const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -326,7 +371,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'openrouter/free',
+            model: openRouterModel,
             messages: [
               { role: 'system', content: systemInstruction },
               { role: 'user', content: promptText }
@@ -481,7 +526,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 <label>API Provider</label>
                 <select 
                   value={apiProvider}
-                  onChange={(e) => handleProviderChange(e.target.value as 'google' | 'openrouter')}
+                  onChange={(e) => handleProviderChange(e.target.value as 'google' | 'openrouter' | 'groq')}
                   style={{
                     width: '100%',
                     padding: '0.8rem',
@@ -493,20 +538,49 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 >
                   <option value="google">Google Gemini (Official)</option>
                   <option value="openrouter">OpenRouter (Free Bypass)</option>
+                  <option value="groq">Groq (Ultra-Fast Free)</option>
                 </select>
               </div>
 
+              {apiProvider === 'openrouter' && (
+                <div className="input-group" style={{ marginBottom: '1rem' }}>
+                  <label>OpenRouter Free Model</label>
+                  <select 
+                    value={openRouterModel}
+                    onChange={(e) => handleModelChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.8rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--panel-border)',
+                      background: '#f9fafb',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    <option value="openrouter/free">Auto-Router (Best Available)</option>
+                    <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Meta)</option>
+                    <option value="google/gemma-4-31b-it:free">Gemma 4 31B (Google)</option>
+                    <option value="nvidia/nemotron-3-super-120b-a12b:free">Nemotron 3 120B (NVIDIA)</option>
+                  </select>
+                </div>
+              )}
+
               <div className="input-group">
-                <label>{apiProvider === 'google' ? 'Gemini API Key' : 'OpenRouter API Key'}</label>
+                <label>{apiProvider === 'google' ? 'Gemini API Key' : apiProvider === 'openrouter' ? 'OpenRouter API Key' : 'Groq API Key'}</label>
                 <input 
                   type="password" 
-                  value={apiProvider === 'google' ? apiKey : openRouterKey}
+                  value={apiProvider === 'google' ? apiKey : apiProvider === 'openrouter' ? openRouterKey : groqKey}
                   onChange={(e) => saveApiKey(e.target.value)}
-                  placeholder={apiProvider === 'google' ? "AIzaSy..." : "sk-or-v1-..."}
+                  placeholder={apiProvider === 'google' ? "AIzaSy..." : apiProvider === 'openrouter' ? "sk-or-v1-..." : "gsk_..."}
                 />
                 {apiProvider === 'openrouter' && (
                   <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
                     Get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>openrouter.ai/keys</a>. Note: Image uploads are disabled on free OpenRouter models.
+                  </p>
+                )}
+                {apiProvider === 'groq' && (
+                  <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                    Get your free ultra-fast key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>console.groq.com/keys</a>.
                   </p>
                 )}
               </div>
@@ -599,6 +673,22 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                   }}
                 >
                   OpenRouter
+                </button>
+                <button 
+                  onClick={() => handleProviderChange('groq')}
+                  style={{ 
+                    padding: '0.4rem 0.8rem', 
+                    fontSize: '0.8rem', 
+                    borderRadius: '6px', 
+                    border: apiProvider === 'groq' ? '1px solid var(--accent)' : '1px solid #e5e7eb',
+                    background: apiProvider === 'groq' ? 'var(--accent)' : 'white',
+                    color: apiProvider === 'groq' ? 'white' : 'var(--text-main)',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Groq (Fast)
                 </button>
               </div>
               <div style={{ flex: 1 }} />
