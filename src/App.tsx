@@ -565,8 +565,46 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 outline: 'none'
               }}
             />
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.4rem' }}>
-              Press Cmd/Ctrl + Enter to generate
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', alignItems: 'center', background: '#f9fafb', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid var(--panel-border)', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>AI Engine:</span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  onClick={() => handleProviderChange('google')}
+                  style={{ 
+                    padding: '0.4rem 0.8rem', 
+                    fontSize: '0.8rem', 
+                    borderRadius: '6px', 
+                    border: apiProvider === 'google' ? '1px solid var(--accent)' : '1px solid #e5e7eb',
+                    background: apiProvider === 'google' ? 'var(--accent)' : 'white',
+                    color: apiProvider === 'google' ? 'white' : 'var(--text-main)',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Google Gemini
+                </button>
+                <button 
+                  onClick={() => handleProviderChange('openrouter')}
+                  style={{ 
+                    padding: '0.4rem 0.8rem', 
+                    fontSize: '0.8rem', 
+                    borderRadius: '6px', 
+                    border: apiProvider === 'openrouter' ? '1px solid var(--accent)' : '1px solid #e5e7eb',
+                    background: apiProvider === 'openrouter' ? 'var(--accent)' : 'white',
+                    color: apiProvider === 'openrouter' ? 'white' : 'var(--text-main)',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  OpenRouter
+                </button>
+              </div>
+              <div style={{ flex: 1 }} />
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Press Cmd/Ctrl + Enter to generate
+              </div>
             </div>
           </div>
 
