@@ -795,145 +795,136 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
           {(!showSettings && !showHistory) && (
             <>
-              <div className="input-group" style={{ marginTop: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label style={{ fontSize: '1.1rem', color: 'var(--text-main)', margin: 0 }}>What do you want to create?</label>
-              <select 
-                value={activeCategory}
-                onChange={(e) => changeCategory(e.target.value)}
-                style={{
-                  padding: '0.4rem 0.8rem',
-                  fontSize: '0.85rem',
-                  borderRadius: '8px',
-                  border: '1px solid var(--panel-border)',
-                  background: '#f9fafb',
-                  color: 'var(--text-main)',
-                  cursor: 'pointer',
-                  outline: 'none',
-                  fontWeight: 500
-                }}
-              >
-                {CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ position: 'relative' }}>
-              <textarea 
-                value={inputPrompt}
-                onChange={(e) => {
-                  setInputPrompt(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = (e.target.scrollHeight) + 'px';
-                }}
-                placeholder={`e.g. ${isVisualCategory ? "A neon-lit futuristic city" : "Explain React hooks to a beginner"}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    generatePrompt();
-                    return;
-                  }
-                  
-                  if (showSuggestions && autocompleteSuggestions.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setSelectedSuggestionIndex(prev => 
-                        prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
-                      );
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
-                    } else if (e.key === 'Enter' || e.key === 'Tab') {
-                      if (selectedSuggestionIndex >= 0) {
-                        e.preventDefault();
-                        setInputPrompt(autocompleteSuggestions[selectedSuggestionIndex]);
+            <div className="editor-container" style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <label style={{ fontSize: '1.1rem', color: 'var(--text-main)', margin: 0 }}>What do you want to create?</label>
+                    <select 
+                      value={activeCategory}
+                      onChange={(e) => changeCategory(e.target.value)}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.85rem',
+                        borderRadius: '8px',
+                        border: '1px solid var(--panel-border)',
+                        background: '#f9fafb',
+                        color: 'var(--text-main)',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        fontWeight: 500
+                      }}
+                    >
+                      {CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <textarea 
+                    value={inputPrompt}
+                    onChange={(e) => {
+                      setInputPrompt(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = (e.target.scrollHeight) + 'px';
+                    }}
+                    placeholder={`e.g. ${isVisualCategory ? "A neon-lit futuristic city" : "Explain React hooks to a beginner"}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        generatePrompt();
+                        return;
+                      }
+                      
+                      if (showSuggestions && autocompleteSuggestions.length > 0) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex(prev => 
+                            prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' || e.key === 'Tab') {
+                          if (selectedSuggestionIndex >= 0) {
+                            e.preventDefault();
+                            setInputPrompt(autocompleteSuggestions[selectedSuggestionIndex]);
+                            setShowSuggestions(false);
+                          }
+                        }
+                      } else if (e.key === 'Escape') {
                         setShowSuggestions(false);
                       }
-                    } else if (e.key === 'Escape') {
-                      setShowSuggestions(false);
-                    }
-                  }
-                }}
-                style={{ 
-                  padding: '1.2rem', 
-                  fontSize: '1.1rem', 
-                  width: '100%', 
-                  borderRadius: '12px', 
-                  border: '1px solid var(--panel-border)', 
-                  background: '#ffffff',
-                  resize: 'none',
-                  minHeight: '60px',
-                  maxHeight: '200px',
-                  fontFamily: 'inherit',
-                  outline: 'none'
-                }}
-              />
-              
-              {showSuggestions && (autocompleteSuggestions.length > 0 || isPredicting) && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  background: '#ffffff',
-                  border: '1px solid var(--panel-border)',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                  marginTop: '0.25rem',
-                  zIndex: 50,
-                  overflow: 'hidden'
-                }}>
-                  {isPredicting ? (
-                    <div style={{
-                      padding: '1rem 1.2rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.75rem',
-                      color: 'var(--text-muted)',
-                      fontSize: '0.95rem'
-                    }}>
-                      <Loader2 size={16} className="spin" color="var(--accent)" />
-                      AI is thinking of ideas...
+                    }}
+                    style={{ 
+                      padding: '1.2rem', 
+                      fontSize: '1.1rem', 
+                      width: '100%', 
+                      flex: 1,
+                      borderRadius: '12px', 
+                      border: '1px solid var(--panel-border)', 
+                      background: '#ffffff',
+                      resize: 'none',
+                      minHeight: '120px',
+                      maxHeight: '300px',
+                      fontFamily: 'inherit',
+                      outline: 'none'
+                    }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Press Cmd/Ctrl + Enter to generate
                     </div>
-                  ) : (
-                    autocompleteSuggestions.map((suggestion, idx) => (
-                      <div 
-                        key={idx}
-                        onClick={() => {
-                          setInputPrompt(suggestion);
-                          setShowSuggestions(false);
-                        }}
-                        style={{
-                          padding: '0.8rem 1.2rem',
-                          cursor: 'pointer',
-                          fontSize: '0.95rem',
-                          color: 'var(--text-main)',
-                          borderBottom: idx < autocompleteSuggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
-                          transition: 'background 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          background: idx === selectedSuggestionIndex ? '#f9fafb' : 'transparent'
-                        }}
-                        onMouseEnter={() => setSelectedSuggestionIndex(idx)}
-                        onMouseLeave={() => setSelectedSuggestionIndex(-1)}
-                      >
-                        <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {highlightMatch(suggestion, inputPrompt)}
-                        </span>
-                      </div>
-                    ))
-                  )}
+                  </div>
                 </div>
-              )}
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Press Cmd/Ctrl + Enter to generate
+                
+                <div className="suggestions-side-panel" style={{ flex: '1 1 250px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--panel-border)', padding: '1rem', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <Sparkles size={14} color="var(--accent)" /> AI Co-Pilot Suggestions
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                    {isPredicting ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--text-muted)', fontSize: '0.95rem', padding: '1rem', justifyContent: 'center', height: '100%' }}>
+                        <Loader2 size={18} className="spin" color="var(--accent)" />
+                        Thinking...
+                      </div>
+                    ) : showSuggestions && autocompleteSuggestions.length > 0 ? (
+                      autocompleteSuggestions.map((suggestion, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={() => {
+                            setInputPrompt(suggestion);
+                            setShowSuggestions(false);
+                          }}
+                          style={{
+                            padding: '0.75rem',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            color: 'var(--text-main)',
+                            borderRadius: '8px',
+                            border: '1px solid',
+                            borderColor: idx === selectedSuggestionIndex ? 'var(--accent)' : 'var(--panel-border)',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.5rem',
+                            background: idx === selectedSuggestionIndex ? '#ffffff' : 'transparent',
+                            boxShadow: idx === selectedSuggestionIndex ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                          }}
+                          onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                          onMouseLeave={() => setSelectedSuggestionIndex(-1)}
+                        >
+                          <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: '0.1rem' }}>✦</span>
+                          <span style={{ lineHeight: 1.4 }}>
+                            {highlightMatch(suggestion, inputPrompt)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.9rem', fontStyle: 'italic', height: '100%', textAlign: 'center', padding: '1rem' }}>
+                        Start typing keywords in the box to see AI predictions...
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
           <div className="button-row" style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', alignItems: 'center' }}>
             <button 
