@@ -253,14 +253,19 @@ function App() {
 
           if (aiResponse) {
             try {
-              // Strip markdown block if present
-              const jsonStr = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
-              const parsed = JSON.parse(jsonStr);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setAutocompleteSuggestions(parsed.slice(0, 3));
+              // Robust JSON array extraction
+              const jsonMatch = aiResponse.match(/\[.*\]/s);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setAutocompleteSuggestions(parsed.slice(0, 3));
+                }
+              } else {
+                console.error("No JSON array found in AI response:", aiResponse);
+                setShowSuggestions(false);
               }
             } catch (e) {
-              console.error("Failed to parse AI autocomplete:", e);
+              console.error("Failed to parse AI autocomplete:", e, "Raw:", aiResponse);
               setShowSuggestions(false);
             }
           } else {
