@@ -647,6 +647,9 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
   return (
     <div className="app-container">
+      <div className="ambient-orb orb-1"></div>
+      <div className="ambient-orb orb-2"></div>
+      
       <header className="header">
         <h1 
           className="title" 
