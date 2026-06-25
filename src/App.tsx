@@ -215,7 +215,8 @@ CRITICAL: Reply ONLY with a valid JSON array of 3 strings. Do not include markdo
 Example: ["Develop a python script that uses ML to predict the stock market", "Create a react component with a 3D WebGL particle system", "Build a mobile app for tracking lucid dreams"]`;
           
           let aiResponse = '';
-          
+          let rawResponseData: any = null;
+
           if ((apiProvider === 'google' && !apiKey) || 
               (apiProvider === 'groq' && !groqKey) || 
               (apiProvider === 'openrouter' && !openRouterKey)) {
@@ -247,6 +248,7 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
               })
             });
             const data = await res.json();
+            rawResponseData = data;
             aiResponse = data.choices?.[0]?.message?.content || '';
           } else if (apiProvider === 'openrouter' && openRouterKey) {
             const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -264,6 +266,7 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
               })
             });
             const data = await res.json();
+            rawResponseData = data;
             if (data.error) {
               setAutocompleteSuggestions([`⚠️ OpenRouter Error: ${data.error.message || 'Unknown error'}`]);
               setShowSuggestions(true);
@@ -297,7 +300,7 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
               setShowSuggestions(true);
             }
           } else {
-            setAutocompleteSuggestions(['⚠️ AI was unable to generate suggestions.']);
+            setAutocompleteSuggestions([`⚠️ Empty Response. Debug: ${JSON.stringify(rawResponseData || 'No data').substring(0, 80)}`]);
             setShowSuggestions(true);
           }
         } catch (e) {
