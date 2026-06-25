@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Settings, Copy, Check, Loader2, X, History as HistoryIcon, Trash2, Dices, ChevronDown, ChevronUp, Eraser, FileText, Globe, Flame } from 'lucide-react';
+import { Sparkles, Settings, Copy, Check, Loader2, X, History as HistoryIcon, Trash2, Dices, ChevronDown, ChevronUp, Eraser, FileText, Globe, Flame, ArrowLeft } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import './App.css';
 
@@ -522,6 +522,15 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
           {showSettings && (
             <div className="settings-panel">
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--panel-border)' }}>
+                <button 
+                  onClick={() => setShowSettings(false)}
+                  style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+                >
+                  <ArrowLeft size={18} />
+                  Back to Dashboard
+                </button>
+              </div>
               <div className="input-group" style={{ marginBottom: '1rem' }}>
                 <label>API Provider</label>
                 <select 
@@ -639,59 +648,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 outline: 'none'
               }}
             />
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', alignItems: 'center', background: '#f9fafb', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid var(--panel-border)', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>AI Engine:</span>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button 
-                  onClick={() => handleProviderChange('google')}
-                  style={{ 
-                    padding: '0.4rem 0.8rem', 
-                    fontSize: '0.8rem', 
-                    borderRadius: '6px', 
-                    border: apiProvider === 'google' ? '1px solid var(--accent)' : '1px solid #e5e7eb',
-                    background: apiProvider === 'google' ? 'var(--accent)' : 'white',
-                    color: apiProvider === 'google' ? 'white' : 'var(--text-main)',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Google Gemini
-                </button>
-                <button 
-                  onClick={() => handleProviderChange('openrouter')}
-                  style={{ 
-                    padding: '0.4rem 0.8rem', 
-                    fontSize: '0.8rem', 
-                    borderRadius: '6px', 
-                    border: apiProvider === 'openrouter' ? '1px solid var(--accent)' : '1px solid #e5e7eb',
-                    background: apiProvider === 'openrouter' ? 'var(--accent)' : 'white',
-                    color: apiProvider === 'openrouter' ? 'white' : 'var(--text-main)',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  OpenRouter
-                </button>
-                <button 
-                  onClick={() => handleProviderChange('groq')}
-                  style={{ 
-                    padding: '0.4rem 0.8rem', 
-                    fontSize: '0.8rem', 
-                    borderRadius: '6px', 
-                    border: apiProvider === 'groq' ? '1px solid var(--accent)' : '1px solid #e5e7eb',
-                    background: apiProvider === 'groq' ? 'var(--accent)' : 'white',
-                    color: apiProvider === 'groq' ? 'white' : 'var(--text-main)',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Groq (Fast)
-                </button>
-              </div>
-              <div style={{ flex: 1 }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 Press Cmd/Ctrl + Enter to generate
               </div>
@@ -894,7 +851,16 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
         {showHistory && (
           <div className="glass-panel history-panel fade-in">
-            <h3>Prompt History</h3>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--panel-border)' }}>
+              <button 
+                onClick={() => setShowHistory(false)}
+                style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+              >
+                <ArrowLeft size={18} />
+                Back to Dashboard
+              </button>
+            </div>
+            <h3 style={{ marginTop: 0 }}>Prompt History</h3>
             {history.length === 0 ? (
               <p className="empty-history">No prompts generated yet.</p>
             ) : (
