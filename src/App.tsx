@@ -213,6 +213,15 @@ function App() {
           
           let aiResponse = '';
           
+          if ((apiProvider === 'google' && !apiKey) || 
+              (apiProvider === 'groq' && !groqKey) || 
+              (apiProvider === 'openrouter' && !openRouterKey)) {
+            setAutocompleteSuggestions(['⚠️ Please set your API key in Settings to enable AI Co-Pilot']);
+            setShowSuggestions(true);
+            setIsPredicting(false);
+            return;
+          }
+
           if (apiProvider === 'google' && apiKey) {
             const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
@@ -263,21 +272,29 @@ function App() {
                 const parsed = JSON.parse(jsonMatch[0]);
                 if (Array.isArray(parsed) && parsed.length > 0) {
                   setAutocompleteSuggestions(parsed.slice(0, 3));
+                  setShowSuggestions(true);
+                } else {
+                  setAutocompleteSuggestions(['⚠️ AI was unable to generate suggestions. Try typing more.']);
+                  setShowSuggestions(true);
                 }
               } else {
                 console.error("No JSON array found in AI response:", aiResponse);
-                setShowSuggestions(false);
+                setAutocompleteSuggestions(['⚠️ AI returned a non-JSON response.']);
+                setShowSuggestions(true);
               }
             } catch (e) {
               console.error("Failed to parse AI autocomplete:", e, "Raw:", aiResponse);
-              setShowSuggestions(false);
+              setAutocompleteSuggestions(['⚠️ AI returned an invalid response format.']);
+              setShowSuggestions(true);
             }
           } else {
-            setShowSuggestions(false);
+            setAutocompleteSuggestions(['⚠️ AI was unable to generate suggestions.']);
+            setShowSuggestions(true);
           }
         } catch (e) {
           console.error("AI Prediction Error:", e);
-          setShowSuggestions(false);
+          setAutocompleteSuggestions(['⚠️ Connection Error: Could not reach AI provider.']);
+          setShowSuggestions(true);
         } finally {
           setIsPredicting(false);
         }
