@@ -511,14 +511,16 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
       <div className="main-layout">
         <div className="glass-panel main-panel">
-          <div className="panel-header" style={{ justifyContent: 'flex-end', borderBottom: 'none', paddingBottom: 0 }}>
-            <button className="icon-btn" onClick={() => setShowHistory(!showHistory)} title="Toggle History" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
-              <HistoryIcon size={20} />
-            </button>
-            <button className="icon-btn" onClick={() => setShowSettings(!showSettings)} title="Settings" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
-              <Settings size={20} />
-            </button>
-          </div>
+          {!(showSettings || showHistory) && (
+            <div className="panel-header" style={{ justifyContent: 'flex-end', borderBottom: 'none', paddingBottom: 0 }}>
+              <button className="icon-btn" onClick={() => setShowHistory(true)} title="Toggle History" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
+                <HistoryIcon size={20} />
+              </button>
+              <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
+                <Settings size={20} />
+              </button>
+            </div>
+          )}
 
           {showSettings && (
             <div className="settings-panel">
@@ -593,6 +595,48 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                   </p>
                 )}
               </div>
+            </div>
+          )}
+
+          {showHistory && (
+            <div className="history-panel fade-in">
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--panel-border)' }}>
+                <button 
+                  onClick={() => setShowHistory(false)}
+                  style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+                >
+                  <ArrowLeft size={18} />
+                  Back to Dashboard
+                </button>
+              </div>
+              <h3 style={{ marginTop: 0 }}>Prompt History</h3>
+              {history.length === 0 ? (
+                <p className="empty-history">No prompts generated yet.</p>
+              ) : (
+                <div className="history-list">
+                  {history.map(item => (
+                    <div key={item.id} className="history-item" style={{ padding: '1rem', border: '1px solid var(--panel-border)', borderRadius: '8px', marginBottom: '1rem' }}>
+                      <div className="history-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                        <span className="history-idea" style={{ fontWeight: 600, color: 'var(--text-main)', paddingRight: '1rem' }}>{item.shortIdea}</span>
+                        <button className="delete-history-btn" onClick={() => deleteHistoryItem(item.id)} style={{ flexShrink: 0, padding: '0.2rem', cursor: 'pointer', background: 'transparent', border: 'none', color: '#ef4444' }}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div 
+                        className="history-prompt" 
+                        onClick={() => setSelectedHistoryItem(item)}
+                        style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        title="Click to view full prompt"
+                      >
+                        {item.fullPrompt}
+                      </div>
+                      <button className="history-copy-btn" onClick={() => copyToClipboard(item.fullPrompt)} style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', background: '#f3f4f6', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        Copy
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -849,47 +893,6 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           )}
         </div>
 
-        {showHistory && (
-          <div className="glass-panel history-panel fade-in">
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--panel-border)' }}>
-              <button 
-                onClick={() => setShowHistory(false)}
-                style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 600, padding: 0 }}
-              >
-                <ArrowLeft size={18} />
-                Back to Dashboard
-              </button>
-            </div>
-            <h3 style={{ marginTop: 0 }}>Prompt History</h3>
-            {history.length === 0 ? (
-              <p className="empty-history">No prompts generated yet.</p>
-            ) : (
-              <div className="history-list">
-                {history.map(item => (
-                  <div key={item.id} className="history-item">
-                    <div className="history-header">
-                      <span className="history-idea">{item.shortIdea}</span>
-                      <button className="delete-history-btn" onClick={() => deleteHistoryItem(item.id)}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div 
-                      className="history-prompt" 
-                      onClick={() => setSelectedHistoryItem(item)}
-                      style={{ cursor: 'pointer' }}
-                      title="Click to view full prompt"
-                    >
-                      {item.fullPrompt}
-                    </div>
-                    <button className="history-copy-btn" onClick={() => copyToClipboard(item.fullPrompt)}>
-                      Copy
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {selectedHistoryItem && (
