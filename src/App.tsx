@@ -77,6 +77,7 @@ function App() {
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isPredicting, setIsPredicting] = useState(false);
   const [copied, setCopied] = useState(false);
   
   // Category State
@@ -157,25 +158,22 @@ function App() {
       setAutocompleteSuggestions([]);
       setShowSuggestions(false);
       setSelectedSuggestionIndex(-1);
+      setIsPredicting(false);
       return;
     }
     
     const query = inputPrompt.toLowerCase();
     let matches: string[] = [];
     
-    // Check if the active category has exact matches in SUGGESTIONS keys
-    // Our activeCategory names are like "Image Generation", "Coding", etc.
     const activeKey = Object.keys(SUGGESTIONS).find(k => k.includes(activeCategory) || activeCategory.includes(k));
     
     if (activeKey) {
-      // Prioritize matches from the active category
       const categorySuggestions = SUGGESTIONS[activeKey];
       matches = categorySuggestions.filter(s => 
         s.toLowerCase().includes(query) && s.toLowerCase() !== query
       );
     }
     
-    // Fill the rest with other categories if we don't have enough matches
     if (matches.length < 5) {
       const otherSuggestions = Object.entries(SUGGESTIONS)
         .filter(([key]) => key !== activeKey)
@@ -188,13 +186,101 @@ function App() {
       matches = [...matches, ...additionalMatches];
     }
     
-    // Limit to top 5 and deduplicate
     matches = Array.from(new Set(matches)).slice(0, 5);
     
-    setAutocompleteSuggestions(matches);
-    setShowSuggestions(matches.length > 0);
-    setSelectedSuggestionIndex(-1); // Reset index when suggestions change
-  }, [inputPrompt, activeCategory]);
+    // If we have static matches, show them immediately
+    if (matches.length > 0) {
+      setAutocompleteSuggestions(matches);
+      setShowSuggestions(true);
+      setSelectedSuggestionIndex(-1);
+      setIsPredicting(false);
+      return;
+    }
+
+    // If no static matches and query is long enough, try AI prediction
+    if (query.length > 3) {
+      setIsPredicting(true);
+      setShowSuggestions(true);
+      setAutocompleteSuggestions([]);
+      
+      const timer = setTimeout(async () => {
+        try {
+          const sysPrompt = `You are an autocomplete engine for a prompt generator tool. The user is in the '${activeCategory}' category. They started typing: '${inputPrompt}'. Generate 3 short, creative ways to complete their thought as a prompt idea. Reply ONLY with a JSON array of 3 strings. Example: ["Develop a python script", "Create a react component", "Build a mobile app"]`;
+          
+          let aiResponse = '';
+          
+          if (apiProvider === 'google' && apiKey) {
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: sysPrompt,
+              config: { temperature: 0.7 }
+            });
+            aiResponse = response.text || '';
+          } else if (apiProvider === 'groq' && groqKey) {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${groqKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: sysPrompt }],
+                temperature: 0.7
+              })
+            });
+            const data = await res.json();
+            aiResponse = data.choices?.[0]?.message?.content || '';
+          } else if (apiProvider === 'openrouter' && openRouterKey) {
+            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${openRouterKey}`,
+                'HTTP-Referer': window.location.href,
+                'X-Title': 'PromptCrafter',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: openRouterModel || 'openrouter/free',
+                messages: [{ role: 'user', content: sysPrompt }],
+                temperature: 0.7
+              })
+            });
+            const data = await res.json();
+            aiResponse = data.choices?.[0]?.message?.content || '';
+          }
+
+          if (aiResponse) {
+            try {
+              // Strip markdown block if present
+              const jsonStr = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
+              const parsed = JSON.parse(jsonStr);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setAutocompleteSuggestions(parsed.slice(0, 3));
+              }
+            } catch (e) {
+              console.error("Failed to parse AI autocomplete:", e);
+              setShowSuggestions(false);
+            }
+          } else {
+            setShowSuggestions(false);
+          }
+        } catch (e) {
+          console.error("AI Prediction Error:", e);
+          setShowSuggestions(false);
+        } finally {
+          setIsPredicting(false);
+        }
+      }, 500); // 500ms debounce
+      
+      return () => clearTimeout(timer);
+    } else {
+      setShowSuggestions(false);
+      setIsPredicting(false);
+    }
+    
+  }, [inputPrompt, activeCategory, apiProvider, apiKey, groqKey, openRouterKey, openRouterModel]);
 
   const saveHistory = (newHistory: HistoryItem[]) => {
     setHistory(newHistory);
@@ -774,7 +860,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 }}
               />
               
-              {showSuggestions && autocompleteSuggestions.length > 0 && (
+              {showSuggestions && (autocompleteSuggestions.length > 0 || isPredicting) && (
                 <div style={{
                   position: 'absolute',
                   top: '100%',
@@ -788,34 +874,48 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                   zIndex: 50,
                   overflow: 'hidden'
                 }}>
-                  {autocompleteSuggestions.map((suggestion, idx) => (
-                    <div 
-                      key={idx}
-                      onClick={() => {
-                        setInputPrompt(suggestion);
-                        setShowSuggestions(false);
-                      }}
-                      style={{
-                        padding: '0.8rem 1.2rem',
-                        cursor: 'pointer',
-                        fontSize: '0.95rem',
-                        color: 'var(--text-main)',
-                        borderBottom: idx < autocompleteSuggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
-                        transition: 'background 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        background: idx === selectedSuggestionIndex ? '#f9fafb' : 'transparent'
-                      }}
-                      onMouseEnter={() => setSelectedSuggestionIndex(idx)}
-                      onMouseLeave={() => setSelectedSuggestionIndex(-1)}
-                    >
-                      <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {highlightMatch(suggestion, inputPrompt)}
-                      </span>
+                  {isPredicting ? (
+                    <div style={{
+                      padding: '1rem 1.2rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.95rem'
+                    }}>
+                      <Loader2 size={16} className="spin" color="var(--accent)" />
+                      AI is thinking of ideas...
                     </div>
-                  ))}
+                  ) : (
+                    autocompleteSuggestions.map((suggestion, idx) => (
+                      <div 
+                        key={idx}
+                        onClick={() => {
+                          setInputPrompt(suggestion);
+                          setShowSuggestions(false);
+                        }}
+                        style={{
+                          padding: '0.8rem 1.2rem',
+                          cursor: 'pointer',
+                          fontSize: '0.95rem',
+                          color: 'var(--text-main)',
+                          borderBottom: idx < autocompleteSuggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                          transition: 'background 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          background: idx === selectedSuggestionIndex ? '#f9fafb' : 'transparent'
+                        }}
+                        onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                        onMouseLeave={() => setSelectedSuggestionIndex(-1)}
+                      >
+                        <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {highlightMatch(suggestion, inputPrompt)}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
