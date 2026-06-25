@@ -209,7 +209,10 @@ function App() {
       
       const timer = setTimeout(async () => {
         try {
-          const sysPrompt = `You are an AI Co-Pilot for a prompt generator. The user is in the '${activeCategory}' category. They typed: '${inputPrompt}'. Generate 3 highly creative, out-of-the-box, lateral-thinking ways to finish their thought. Don't just finish the sentence predictably; give them an incredible idea they haven't thought of. Reply ONLY with a JSON array of 3 strings. Example: ["Develop a python script that uses ML to predict the stock market", "Create a react component with a 3D WebGL particle system", "Build a mobile app for tracking lucid dreams"]`;
+          const sysPrompt = `You are an AI Co-Pilot for a prompt generator. The user is in the '${activeCategory}' category. They typed: '${inputPrompt}'. Generate 3 highly creative, out-of-the-box, lateral-thinking ways to finish their thought. Don't just finish the sentence predictably; give them an incredible idea they haven't thought of. 
+
+CRITICAL: Reply ONLY with a valid JSON array of 3 strings. Do not include markdown formatting, code blocks, or any other text. 
+Example: ["Develop a python script that uses ML to predict the stock market", "Create a react component with a 3D WebGL particle system", "Build a mobile app for tracking lucid dreams"]`;
           
           let aiResponse = '';
           
@@ -255,7 +258,7 @@ function App() {
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                model: openRouterModel || 'openrouter/free',
+                model: 'google/gemini-2.5-flash-free',
                 messages: [{ role: 'user', content: sysPrompt }],
                 temperature: 0.7
               })
