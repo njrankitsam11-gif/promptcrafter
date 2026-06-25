@@ -264,6 +264,12 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
               })
             });
             const data = await res.json();
+            if (data.error) {
+              setAutocompleteSuggestions([`⚠️ OpenRouter Error: ${data.error.message || 'Unknown error'}`]);
+              setShowSuggestions(true);
+              setIsPredicting(false);
+              return;
+            }
             aiResponse = data.choices?.[0]?.message?.content || '';
           }
 
@@ -301,7 +307,7 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
         } finally {
           setIsPredicting(false);
         }
-      }, 500); // 500ms debounce
+      }, 1200); // 1200ms debounce to protect rate limits
       
       return () => clearTimeout(timer);
     } else {
