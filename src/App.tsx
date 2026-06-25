@@ -53,6 +53,17 @@ const RANDOM_IDEAS = {
   Text: ["Write a cold email to a CEO", "Explain quantum physics to a 5-year old", "Write a python script for web scraping", "Create a marketing plan for energy drinks", "Write a short sci-fi story about a rogue AI"]
 };
 
+function highlightMatch(text: string, query: string) {
+  if (!query) return text;
+  
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  
+  return parts.map((part, i) => 
+    regex.test(part) ? <span key={i} style={{ fontWeight: 800, color: 'var(--accent)' }}>{part}</span> : part
+  );
+}
+
 function App() {
   const [apiKey, setApiKey] = useState('');
   const [openRouterKey, setOpenRouterKey] = useState('');
@@ -63,6 +74,7 @@ function App() {
   const [inputPrompt, setInputPrompt] = useState('');
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -144,21 +156,45 @@ function App() {
     if (!inputPrompt.trim()) {
       setAutocompleteSuggestions([]);
       setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
       return;
     }
     
-    // Get all suggestions across categories
-    const allSuggestions = Object.values(SUGGESTIONS).flat();
     const query = inputPrompt.toLowerCase();
+    let matches: string[] = [];
     
-    // Filter suggestions that include the input keywords
-    const matches = allSuggestions.filter(s => 
-      s.toLowerCase().includes(query) && s.toLowerCase() !== query
-    ).slice(0, 5); // Limit to top 5
+    // Check if the active category has exact matches in SUGGESTIONS keys
+    // Our activeCategory names are like "Image Generation", "Coding", etc.
+    const activeKey = Object.keys(SUGGESTIONS).find(k => k.includes(activeCategory) || activeCategory.includes(k));
+    
+    if (activeKey) {
+      // Prioritize matches from the active category
+      const categorySuggestions = SUGGESTIONS[activeKey];
+      matches = categorySuggestions.filter(s => 
+        s.toLowerCase().includes(query) && s.toLowerCase() !== query
+      );
+    }
+    
+    // Fill the rest with other categories if we don't have enough matches
+    if (matches.length < 5) {
+      const otherSuggestions = Object.entries(SUGGESTIONS)
+        .filter(([key]) => key !== activeKey)
+        .flatMap(([, items]) => items);
+        
+      const additionalMatches = otherSuggestions.filter(s => 
+        s.toLowerCase().includes(query) && s.toLowerCase() !== query
+      );
+      
+      matches = [...matches, ...additionalMatches];
+    }
+    
+    // Limit to top 5 and deduplicate
+    matches = Array.from(new Set(matches)).slice(0, 5);
     
     setAutocompleteSuggestions(matches);
     setShowSuggestions(matches.length > 0);
-  }, [inputPrompt]);
+    setSelectedSuggestionIndex(-1); // Reset index when suggestions change
+  }, [inputPrompt, activeCategory]);
 
   const saveHistory = (newHistory: HistoryItem[]) => {
     setHistory(newHistory);
@@ -700,6 +736,27 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                     generatePrompt();
+                    return;
+                  }
+                  
+                  if (showSuggestions && autocompleteSuggestions.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setSelectedSuggestionIndex(prev => 
+                        prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
+                      );
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                      if (selectedSuggestionIndex >= 0) {
+                        e.preventDefault();
+                        setInputPrompt(autocompleteSuggestions[selectedSuggestionIndex]);
+                        setShowSuggestions(false);
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowSuggestions(false);
+                    }
                   }
                 }}
                 style={{ 
@@ -747,14 +804,15 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                         transition: 'background 0.2s',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.5rem'
+                        gap: '0.5rem',
+                        background: idx === selectedSuggestionIndex ? '#f9fafb' : 'transparent'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                      onMouseLeave={() => setSelectedSuggestionIndex(-1)}
                     >
                       <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {suggestion}
+                        {highlightMatch(suggestion, inputPrompt)}
                       </span>
                     </div>
                   ))}
