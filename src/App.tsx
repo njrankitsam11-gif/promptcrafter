@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Settings, Copy, Check, Loader2, X, History as HistoryIcon, Trash2, Dices, ChevronDown, ChevronUp, Eraser, FileText, Globe, Flame, ArrowLeft } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import './App.css';
+import { SUGGESTIONS } from './suggestions';
 
 interface HistoryItem {
   id: string;
@@ -60,6 +61,8 @@ function App() {
   const [openRouterModel, setOpenRouterModel] = useState('openrouter/free');
   const [showSettings, setShowSettings] = useState(false);
   const [inputPrompt, setInputPrompt] = useState('');
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -136,6 +139,26 @@ function App() {
     setOpenRouterModel(model);
     localStorage.setItem('openrouter_model', model);
   };
+
+  useEffect(() => {
+    if (!inputPrompt.trim()) {
+      setAutocompleteSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    
+    // Get all suggestions across categories
+    const allSuggestions = Object.values(SUGGESTIONS).flat();
+    const query = inputPrompt.toLowerCase();
+    
+    // Filter suggestions that include the input keywords
+    const matches = allSuggestions.filter(s => 
+      s.toLowerCase().includes(query) && s.toLowerCase() !== query
+    ).slice(0, 5); // Limit to top 5
+    
+    setAutocompleteSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+  }, [inputPrompt]);
 
   const saveHistory = (newHistory: HistoryItem[]) => {
     setHistory(newHistory);
@@ -665,33 +688,80 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 ))}
               </select>
             </div>
-            <textarea 
-              value={inputPrompt}
-              onChange={(e) => {
-                setInputPrompt(e.target.value);
-                e.target.style.height = 'auto';
-                e.target.style.height = (e.target.scrollHeight) + 'px';
-              }}
-              placeholder={`e.g. ${isVisualCategory ? "A neon-lit futuristic city" : "Explain React hooks to a beginner"}`}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  generatePrompt();
-                }
-              }}
-              style={{ 
-                padding: '1.2rem', 
-                fontSize: '1.1rem', 
-                width: '100%', 
-                borderRadius: '12px', 
-                border: '1px solid var(--panel-border)', 
-                background: '#ffffff',
-                resize: 'none',
-                minHeight: '60px',
-                maxHeight: '200px',
-                fontFamily: 'inherit',
-                outline: 'none'
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <textarea 
+                value={inputPrompt}
+                onChange={(e) => {
+                  setInputPrompt(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = (e.target.scrollHeight) + 'px';
+                }}
+                placeholder={`e.g. ${isVisualCategory ? "A neon-lit futuristic city" : "Explain React hooks to a beginner"}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    generatePrompt();
+                  }
+                }}
+                style={{ 
+                  padding: '1.2rem', 
+                  fontSize: '1.1rem', 
+                  width: '100%', 
+                  borderRadius: '12px', 
+                  border: '1px solid var(--panel-border)', 
+                  background: '#ffffff',
+                  resize: 'none',
+                  minHeight: '60px',
+                  maxHeight: '200px',
+                  fontFamily: 'inherit',
+                  outline: 'none'
+                }}
+              />
+              
+              {showSuggestions && autocompleteSuggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  marginTop: '0.25rem',
+                  zIndex: 50,
+                  overflow: 'hidden'
+                }}>
+                  {autocompleteSuggestions.map((suggestion, idx) => (
+                    <div 
+                      key={idx}
+                      onClick={() => {
+                        setInputPrompt(suggestion);
+                        setShowSuggestions(false);
+                      }}
+                      style={{
+                        padding: '0.8rem 1.2rem',
+                        cursor: 'pointer',
+                        fontSize: '0.95rem',
+                        color: 'var(--text-main)',
+                        borderBottom: idx < autocompleteSuggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        transition: 'background 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {suggestion}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 Press Cmd/Ctrl + Enter to generate
