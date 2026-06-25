@@ -47,14 +47,33 @@ const STYLE_CATEGORIES = {
       category: 'Voice & Tone',
       options: ['Academic/Rigorous', 'Witty & Sarcastic', 'Empathic & Warm', 'Concise/Executive', 'Persuasive', 'Satirical']
     }
+  ],
+  Agent: [
+    {
+      category: 'Context Handling',
+      options: ['Strict Adherence (No external info)', 'Summarize Before Answering', 'Extract Entities Only', 'Step-by-Step Reasoning (Chain of Thought)', 'Cite Document Sources']
+    },
+    {
+      category: 'Agent Personas',
+      options: ['Helpful Enterprise Assistant', 'Strict Content Moderator', 'Expert Data Analyst', 'Code Review & Security Bot', 'Level 1 Customer Support']
+    },
+    {
+      category: 'Guardrails & Safety',
+      options: ['Refuse Off-Topic Queries', 'No Conversational Filler', 'Polite Decline', 'Prevent Prompt Injection', 'Data Masking / PII Redaction']
+    },
+    {
+      category: 'Output Formats',
+      options: ['Strict JSON Object', 'Markdown Document', 'XML Data Tags', 'Thought/Action/Observation (ReAct)', 'Concise Bullet Points']
+    }
   ]
 };
 
-const CATEGORIES = ['Coding', 'Writing & Content', 'Image Generation', 'Video Generation', 'Research & Data'];
+const CATEGORIES = ['Coding', 'Writing & Content', 'Image Generation', 'Video Generation', 'Research & Data', 'RAG / AI Agent'];
 
 const RANDOM_IDEAS = {
   Visual: ["A samurai frog", "A floating city in the clouds", "A cute robot planting a tree", "A neon-lit noodle shop", "A dragon drinking tea"],
-  Text: ["Write a cold email to a CEO", "Explain quantum physics to a 5-year old", "Write a python script for web scraping", "Create a marketing plan for energy drinks", "Write a short sci-fi story about a rogue AI"]
+  Text: ["Write a cold email to a CEO", "Explain quantum physics to a 5-year old", "Write a python script for web scraping", "Create a marketing plan for energy drinks", "Write a short sci-fi story about a rogue AI"],
+  Agent: ["A RAG bot for internal HR policies", "An agent that scrapes and summarizes tech news", "A strictly-typed JSON extractor for medical invoices", "A customer support bot that refuses to talk about politics", "A database expert that converts natural language to SQL"]
 };
 
 function highlightMatch(text: string, query: string) {
@@ -227,53 +246,38 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
           }
 
           if (apiProvider === 'google' && apiKey) {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
-              contents: sysPrompt,
-              config: { temperature: 0.7 }
+            const res = await fetch('/api/autocomplete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: 'google', apiKey, sysPrompt })
             });
-            aiResponse = response.text || '';
+            const data = await res.json();
+            rawResponseData = data;
+            aiResponse = data.result || '';
           } else if (apiProvider === 'groq' && groqKey) {
-            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            const res = await fetch('/api/autocomplete', {
               method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${groqKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: sysPrompt }],
-                temperature: 0.7
-              })
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: 'groq', apiKey: groqKey, sysPrompt })
             });
             const data = await res.json();
-            rawResponseData = data;
-            aiResponse = data.choices?.[0]?.message?.content || '';
+            rawResponseData = data.debug;
+            aiResponse = data.result || '';
           } else if (apiProvider === 'openrouter' && openRouterKey) {
-            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            const res = await fetch('/api/autocomplete', {
               method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${openRouterKey}`,
-                'HTTP-Referer': window.location.href,
-                'X-Title': 'PromptCrafter',
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                model: 'google/gemma-2-9b-it:free',
-                messages: [{ role: 'user', content: sysPrompt }],
-                temperature: 0.7
-              })
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: 'openrouter', apiKey: openRouterKey, sysPrompt })
             });
             const data = await res.json();
-            rawResponseData = data;
+            rawResponseData = data.debug;
             if (data.error) {
-              setAutocompleteSuggestions([`⚠️ OpenRouter Error: ${data.error.message || 'Unknown error'}`]);
+              setAutocompleteSuggestions([`⚠️ Backend Error: ${data.error}`]);
               setShowSuggestions(true);
               setIsPredicting(false);
               return;
             }
-            aiResponse = data.choices?.[0]?.message?.content || '';
+            aiResponse = data.result || '';
           }
 
           if (aiResponse) {
@@ -331,11 +335,14 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
     );
   };
 
-  const changeCategory = (cat: string) => {
-    if (activeCategory !== cat) {
+  const handleCategoryChange = (cat: string) => {
+    if (cat !== activeCategory) {
       const wasVisual = activeCategory.includes('Image') || activeCategory.includes('Video');
       const isVisual = cat.includes('Image') || cat.includes('Video');
-      if (wasVisual !== isVisual) {
+      const wasAgent = activeCategory.includes('Agent');
+      const isAgent = cat.includes('Agent');
+      
+      if (wasVisual !== isVisual || wasAgent !== isAgent) {
         setSelectedStyles([]);
       }
       setActiveCategory(cat);
@@ -343,7 +350,13 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
   };
 
   const isVisualCategory = activeCategory.includes('Image') || activeCategory.includes('Video');
-  const currentStyleData = isVisualCategory ? STYLE_CATEGORIES.Visual : STYLE_CATEGORIES.Text;
+  const isAgentCategory = activeCategory.includes('Agent');
+  
+  const currentStyleData = isVisualCategory 
+    ? STYLE_CATEGORIES.Visual 
+    : isAgentCategory 
+      ? STYLE_CATEGORIES.Agent 
+      : STYLE_CATEGORIES.Text;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -456,6 +469,8 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
         categoryInstruction = 'Format the prompt specifically for AI Video generation models (like Runway, Sora), emphasizing motion, camera movements (panning, tracking), lighting dynamics, and cinematic pacing.';
       } else if (activeCategory === 'Research & Data') {
         categoryInstruction = 'Format the prompt specifically for deep research and data analysis. Emphasize analytical rigor, citation formatting, step-by-step reasoning, and structured data outputs (tables, JSON).';
+      } else if (activeCategory === 'RAG / AI Agent') {
+        categoryInstruction = 'Format the output as a highly robust System Prompt designed for an autonomous AI Agent or RAG (Retrieval-Augmented Generation) pipeline. It must include sections for [Role/Persona], [Core Directives], [Context Handling Instructions (how to use {context})], [Guardrails/Safety Rules], and [Output Format/Schema].';
       }
 
       let platformInstruction = '';
@@ -647,7 +662,11 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
 
     let promptToUse = inputPrompt;
     if (!promptToUse.trim()) {
-      const ideasList = isVisualCategory ? RANDOM_IDEAS.Visual : RANDOM_IDEAS.Text;
+      const ideasList = isVisualCategory 
+        ? RANDOM_IDEAS.Visual 
+        : isAgentCategory 
+          ? RANDOM_IDEAS.Agent 
+          : RANDOM_IDEAS.Text;
       promptToUse = ideasList[Math.floor(Math.random() * ideasList.length)];
       setInputPrompt(promptToUse);
     }
@@ -835,7 +854,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                     <label style={{ fontSize: '1.1rem', color: 'var(--text-main)', margin: 0 }}>What do you want to create?</label>
                     <select 
                       value={activeCategory}
-                      onChange={(e) => changeCategory(e.target.value)}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
                       style={{
                         padding: '0.4rem 0.8rem',
                         fontSize: '0.85rem',
@@ -860,7 +879,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                       e.target.style.height = 'auto';
                       e.target.style.height = (e.target.scrollHeight) + 'px';
                     }}
-                    placeholder={`e.g. ${isVisualCategory ? "A neon-lit futuristic city" : "Explain React hooks to a beginner"}`}
+                    placeholder={`e.g. ${isVisualCategory ? "A neon-lit futuristic city" : isAgentCategory ? "A customer support bot that checks inventory" : "Explain React hooks to a beginner"}`}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                         generatePrompt();
@@ -1018,7 +1037,7 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
               </div>
 
               <div className="input-group">
-                <label>{isVisualCategory ? 'Aesthetics & Modifiers' : 'Occupations & Roles'}</label>
+                <label>{isVisualCategory ? 'Aesthetics & Modifiers' : isAgentCategory ? 'Agent Behaviors & Rules' : 'Occupations & Roles'}</label>
                 <select 
                   className="style-dropdown"
                   onChange={(e) => {
