@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Settings, Copy, Check, Loader2, X, History as HistoryIcon, Trash2, Dices, ChevronDown, ChevronUp, Eraser, FileText, Globe, Flame, ArrowLeft } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
+import { Sparkles, Settings, Copy, Check, Loader2, X, History as HistoryIcon, Trash2, Dices, ChevronDown, ChevronUp, Eraser, FileText, Globe, Flame, ArrowLeft, MessageSquare, Share2, Download, Lock, Unlock, UserCircle, LogOut } from 'lucide-react';
+import { PromptTester } from './components/PromptTester';
+import { AuthModal } from './components/AuthModal';
+import { encryptData, decryptData } from './lib/crypto';
+import { PROMPT_FRAMEWORKS, getRecommendedFramework, buildFrameworkSystemPreamble } from './lib/promptFrameworks';
 import './App.css';
 import { SUGGESTIONS } from './suggestions';
 
@@ -122,53 +125,196 @@ function App() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [targetPlatform, setTargetPlatform] = useState<'Any' | 'ChatGPT' | 'Claude' | 'Gemini'>('Any');
+  const [selectedFramework, setSelectedFramework] = useState('auto');
   
   // History
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<HistoryItem | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showPromptTester, setShowPromptTester] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [userToken, setUserToken] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const [pin, setPin] = useState('');
+  const [isLocked, setIsLocked] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const [serverKeysAvailable, setServerKeysAvailable] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    const savedOrKey = localStorage.getItem('openrouter_api_key');
-    const savedGroqKey = localStorage.getItem('groq_api_key');
-    const savedProvider = localStorage.getItem('api_provider');
-    const savedOrModel = localStorage.getItem('openrouter_model');
+    const savedKey = localStorage.getItem('prompt_crafter_gemini_key');
+    const savedOrKey = localStorage.getItem('prompt_crafter_or_key');
+    const savedGroqKey = localStorage.getItem('prompt_crafter_groq_key');
+    const savedProvider = localStorage.getItem('prompt_crafter_provider') as any;
+    const token = localStorage.getItem('prompt_crafter_token');
+    const email = localStorage.getItem('prompt_crafter_email');
     
-    if (savedKey) setApiKey(savedKey);
-    if (savedOrKey) setOpenRouterKey(savedOrKey);
-    if (savedGroqKey) setGroqKey(savedGroqKey);
-    if (savedProvider) setApiProvider(savedProvider as 'google' | 'openrouter' | 'groq');
-    if (savedOrModel) setOpenRouterModel(savedOrModel);
-    
-    if (!savedKey && !savedOrKey && !savedGroqKey) setShowSettings(true);
+    if (savedProvider) setApiProvider(savedProvider);
+    if (token) setUserToken(token);
+    if (email) setUserEmail(email);
 
-    const savedHistory = localStorage.getItem('prompt_history');
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {}
+    if (savedKey || savedOrKey || savedGroqKey) {
+      setIsLocked(true); // Keys exist, prompt for PIN
+    } else {
+      setShowSettings(true); // No keys, show settings
     }
+
+    const checkSharedPrompt = async () => {
+      if (window.location.hash.startsWith('#share=')) {
+        const shareId = window.location.hash.replace('#share=', '');
+        try {
+          const res = await fetch(`/api/share?id=${shareId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.promptData) {
+              setGeneratedPrompt(data.promptData);
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch shared prompt", e);
+        }
+      }
+    };
+    checkSharedPrompt();
+
+    const loadHistory = async (currentToken: string) => {
+      if (currentToken) {
+        setIsSyncing(true);
+        try {
+          const res = await fetch('/api/history', {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.history) {
+              setHistory(data.history);
+              localStorage.setItem('prompt_crafter_history', JSON.stringify(data.history));
+              setIsSyncing(false);
+              return;
+            }
+          } else if (res.status === 401) {
+            handleLogout(); // Token expired or invalid
+          }
+        } catch (e) {
+          console.error("Cloud sync failed on load", e);
+        }
+        setIsSyncing(false);
+      }
+      
+      const savedHistory = localStorage.getItem('prompt_crafter_history');
+      if (savedHistory) {
+        try {
+          setHistory(JSON.parse(savedHistory));
+        } catch (e) {
+          console.error('Failed to parse history', e);
+        }
+      }
+    };
+    
+    loadHistory(token || '');
+
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((data) => {
+        const sk = data.serverKeys;
+        if (sk && (sk.gemini || sk.groq || sk.openrouter)) {
+          setServerKeysAvailable(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  const saveApiKey = (key: string) => {
+  const saveApiKey = async (key: string) => {
+    let finalKey = key;
+    if (pin && key) {
+      try {
+        finalKey = await encryptData(key, pin);
+      } catch (e) {
+        console.error("Encryption failed", e);
+      }
+    }
+
     if (apiProvider === 'google') {
       setApiKey(key);
-      localStorage.setItem('gemini_api_key', key);
+      localStorage.setItem('prompt_crafter_gemini_key', finalKey);
     } else if (apiProvider === 'openrouter') {
       setOpenRouterKey(key);
-      localStorage.setItem('openrouter_api_key', key);
+      localStorage.setItem('prompt_crafter_or_key', finalKey);
     } else {
       setGroqKey(key);
-      localStorage.setItem('groq_api_key', key);
+      localStorage.setItem('prompt_crafter_groq_key', finalKey);
     }
   };
 
+  const handleUnlock = async () => {
+    try {
+      const savedKey = localStorage.getItem('prompt_crafter_gemini_key');
+      const savedOrKey = localStorage.getItem('prompt_crafter_or_key');
+      const savedGroqKey = localStorage.getItem('prompt_crafter_groq_key');
+
+      if (savedKey) setApiKey(await decryptData(savedKey, pin));
+      if (savedOrKey) setOpenRouterKey(await decryptData(savedOrKey, pin));
+      if (savedGroqKey) setGroqKey(await decryptData(savedGroqKey, pin));
+      setIsLocked(false);
+      setPinError('');
+    } catch (e) {
+      setPinError('Incorrect PIN or corrupted data.');
+    }
+  };
+
+  const handleAuthSuccess = async (token: string, email: string) => {
+    setUserToken(token);
+    setUserEmail(email);
+    localStorage.setItem('prompt_crafter_token', token);
+    localStorage.setItem('prompt_crafter_email', email);
+    setShowAuthModal(false);
+
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/history', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.history && data.history.length > 0) {
+          setHistory(data.history);
+          localStorage.setItem('prompt_crafter_history', JSON.stringify(data.history));
+        } else {
+          await fetch('/api/history', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ history }),
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Sync after login failed', e);
+    }
+    setIsSyncing(false);
+  };
+
+  const handleLogout = () => {
+    setUserToken('');
+    setUserEmail('');
+    localStorage.removeItem('prompt_crafter_token');
+    localStorage.removeItem('prompt_crafter_email');
+  };
+
+  const authHeaders = (): Record<string, string> =>
+    userToken ? { Authorization: `Bearer ${userToken}` } : {};
+
   const handleProviderChange = (provider: 'google' | 'openrouter' | 'groq') => {
     setApiProvider(provider);
-    localStorage.setItem('api_provider', provider);
+    localStorage.setItem('prompt_crafter_provider', provider);
   };
 
   const handleModelChange = (model: string) => {
@@ -245,40 +391,28 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
             return;
           }
 
-          if (apiProvider === 'google' && apiKey) {
-            const res = await fetch('/api/autocomplete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ provider: 'google', apiKey, sysPrompt })
-            });
-            const data = await res.json();
-            rawResponseData = data;
-            aiResponse = data.result || '';
-          } else if (apiProvider === 'groq' && groqKey) {
-            const res = await fetch('/api/autocomplete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ provider: 'groq', apiKey: groqKey, sysPrompt })
-            });
-            const data = await res.json();
-            rawResponseData = data.debug;
-            aiResponse = data.result || '';
-          } else if (apiProvider === 'openrouter' && openRouterKey) {
-            const res = await fetch('/api/autocomplete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ provider: 'openrouter', apiKey: openRouterKey, sysPrompt })
-            });
-            const data = await res.json();
-            rawResponseData = data.debug;
-            if (data.error) {
-              setAutocompleteSuggestions([`⚠️ Backend Error: ${data.error}`]);
-              setShowSuggestions(true);
-              setIsPredicting(false);
-              return;
-            }
-            aiResponse = data.result || '';
+          const res = await fetch('/api/autocomplete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({
+              provider: apiProvider,
+              geminiKey: apiKey,
+              groqKey: groqKey,
+              openRouterKey: openRouterKey,
+              sysPrompt
+            })
+          });
+          const data = await res.json();
+          rawResponseData = data.debug;
+          
+          if (data.error) {
+            setAutocompleteSuggestions([`⚠️ Backend Error: ${data.error}`]);
+            setShowSuggestions(true);
+            setIsPredicting(false);
+            return;
           }
+          
+          aiResponse = data.result || '';
 
           if (aiResponse) {
             try {
@@ -324,9 +458,73 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
     
   }, [inputPrompt, activeCategory, apiProvider, apiKey, groqKey, openRouterKey, openRouterModel]);
 
-  const saveHistory = (newHistory: HistoryItem[]) => {
+  const saveHistory = async (newHistory: HistoryItem[]) => {
     setHistory(newHistory);
-    localStorage.setItem('prompt_history', JSON.stringify(newHistory));
+    localStorage.setItem('prompt_crafter_history', JSON.stringify(newHistory));
+    
+    if (userToken) {
+      setIsSyncing(true);
+      try {
+        await fetch('/api/history', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userToken}`
+          },
+          body: JSON.stringify({ history: newHistory })
+        });
+      } catch (e) {
+        console.error("Failed to push history to cloud", e);
+      }
+      setIsSyncing(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (history.length === 0) return;
+    
+    const headers = ["ID", "Idea", "Full Prompt", "Date"];
+    const rows = history.map(item => [
+      item.id,
+      `"${item.shortIdea.replace(/"/g, '""')}"`,
+      `"${item.fullPrompt.replace(/"/g, '""')}"`,
+      new Date(item.timestamp).toISOString()
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n" 
+      + rows.map(e => e.join(",")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "promptcrafter_history.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSharePrompt = async (prompt: string) => {
+    setIsSharing(true);
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promptData: prompt })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const shareUrl = `${window.location.origin}/#share=${data.shareId}`;
+        await navigator.clipboard.writeText(shareUrl);
+        alert(`Share link copied to clipboard!\n${shareUrl}`);
+      } else {
+        alert("Failed to generate share link.");
+      }
+    } catch (e) {
+      console.error("Share failed", e);
+      alert("Failed to share prompt.");
+    }
+    setIsSharing(false);
   };
 
   const toggleStyle = (style: string) => {
@@ -341,11 +539,14 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
       const isVisual = cat.includes('Image') || cat.includes('Video');
       const wasAgent = activeCategory.includes('Agent');
       const isAgent = cat.includes('Agent');
-      
+
       if (wasVisual !== isVisual || wasAgent !== isAgent) {
         setSelectedStyles([]);
       }
       setActiveCategory(cat);
+      if (selectedFramework === 'auto') {
+        setSelectedFramework(getRecommendedFramework(cat).id);
+      }
     }
   };
 
@@ -422,33 +623,15 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
     }
   };
 
-  const fileToGenerativePart = async (file: File): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64Data = (reader.result as string).split(',')[1];
-        resolve({
-          inlineData: {
-            data: base64Data,
-            mimeType: file.type
-          }
-        });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   const executeGeneration = async (promptText: string, stylesToUse: string[], retryCount = 0) => {
-    if (apiProvider === 'google' && !apiKey) {
-      alert('Please set your Gemini API key first!');
-      setShowSettings(true);
-      return;
-    }
-    if (apiProvider === 'openrouter' && !openRouterKey) {
-      alert('Please set your OpenRouter API key first!');
-      setShowSettings(true);
-      return;
+    const hasClientKey =
+      (apiProvider === 'google' && apiKey) ||
+      (apiProvider === 'openrouter' && openRouterKey) ||
+      (apiProvider === 'groq' && groqKey);
+
+    if (!hasClientKey && retryCount === 0) {
+      // Server-side keys may be configured — attempt anyway
+      console.info('No client API key; trying server-side keys if configured.');
     }
     if (!promptText.trim() && !imageFile && !scrapedContext && trendingContext.length === 0) return;
 
@@ -494,99 +677,68 @@ Example: ["Develop a python script that uses ML to predict the stock market", "C
         extraContext += `\n\nTRENDING NEWS CONTEXT (Incorporate these current events into the prompt):\n${trendingContext.map((t, i) => `${i+1}. ${t}`).join('\n')}`;
       }
 
-      const systemInstruction = `You are a legendary, world-class prompt engineer and domain expert. 
+      const frameworkId = selectedFramework === 'auto'
+        ? getRecommendedFramework(activeCategory).id
+        : selectedFramework;
+      const frameworkPreamble = buildFrameworkSystemPreamble(frameworkId, activeCategory);
+
+      const systemInstruction = `You are a legendary, world-class prompt engineer and domain expert.
 Your task is to take a simple, short sentence (and optionally an image reference, document, or web context) and transform it into an incredibly detailed, highly specific, and creative prompt.
+
+${frameworkPreamble}
+
 CRITICAL INSTRUCTION: Analyze the core topic of the user's input and automatically inject deep domain knowledge, expert terminology, industry best practices, and advanced creative frameworks into the final prompt to elevate it from a basic request to a masterclass prompt.
 ${categoryInstruction}
 ${platformInstruction}
 ${stylesInstruction}
 ${extraContext}
 If an image or document is provided, use its contents to inspire and flesh out the specific details.
-Do not include any pleasantries or conversational filler. Output ONLY the generated prompt.`;
+Do not include any pleasantries or conversational filler. Output ONLY the generated prompt — every framework section must be filled with real, topic-specific content.`;
 
-      let resultText = '';
-
-      if (apiProvider === 'google') {
-        const ai = new GoogleGenAI({ apiKey });
-        let contents: any[] = [];
-        if (promptText.trim()) contents.push(promptText);
+        let imageBase64 = '';
+        let mimeType = '';
+        
         if (imageFile) {
-          const documentPart = await fileToGenerativePart(imageFile);
-          contents.push(documentPart);
-        }
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: contents,
-          config: {
-            systemInstruction: systemInstruction,
-            temperature: 0.8,
+          if (apiProvider !== 'google') {
+             throw new Error("Image uploads are only supported when using Google Gemini.");
           }
-        });
-        resultText = response.text || 'Failed to generate prompt.';
-      } else if (apiProvider === 'groq') {
-        if (imageFile) {
-          throw new Error("Image uploads are not currently supported when using Groq. Please switch back to Google Gemini in Settings to upload images, or remove the image.");
-        }
-        if (!groqKey) {
-          throw new Error("Please set your Groq API key in Settings first.");
-        }
-        
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${groqKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              { role: 'system', content: systemInstruction },
-              { role: 'user', content: promptText }
-            ],
-            temperature: 0.8
-          })
-        });
-
-        if (!groqResponse.ok) {
-          const errorData = await groqResponse.json();
-          throw new Error(errorData?.error?.message || `Groq Error: ${groqResponse.status}`);
+          const reader = new FileReader();
+          imageBase64 = await new Promise((resolve, reject) => {
+            reader.onload = () => {
+              const b64 = (reader.result as string).split(',')[1];
+              resolve(b64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(imageFile);
+          });
+          mimeType = imageFile.type;
         }
 
-        const data = await groqResponse.json();
-        resultText = data.choices?.[0]?.message?.content || 'Failed to generate prompt via Groq.';
-      } else {
-        // OpenRouter Fallback
-        if (imageFile) {
-          throw new Error("Image uploads are not currently supported when using OpenRouter. Please switch back to Google Gemini in Settings to upload images, or remove the image.");
-        }
-        
-        const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        const res = await fetch('/api/generate', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openRouterKey}`,
-            'HTTP-Referer': window.location.href, // Required by OpenRouter
-            'X-Title': 'PromptCrafter', // Required by OpenRouter
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({
+            provider: apiProvider,
+            geminiKey: apiKey,
+            groqKey: groqKey,
+            openRouterKey: openRouterKey,
+            systemInstruction,
+            promptText,
+            imageBase64,
+            mimeType,
             model: openRouterModel,
-            messages: [
-              { role: 'system', content: systemInstruction },
-              { role: 'user', content: promptText }
-            ],
-            temperature: 0.8
-          })
+            frameworkId,
+          }),
         });
 
-        if (!openRouterResponse.ok) {
-          const errorData = await openRouterResponse.json();
-          throw new Error(errorData?.error?.message || `OpenRouter Error: ${openRouterResponse.status}`);
+        const data = await res.json();
+        
+        if (!res.ok) {
+           throw new Error(data.error || 'Failed to generate prompt via backend.');
         }
 
-        const data = await openRouterResponse.json();
-        resultText = data.choices?.[0]?.message?.content || 'Failed to generate prompt via OpenRouter.';
-      }
+        let resultText = data.result || 'Failed to generate prompt.';
+
       setGeneratedPrompt(resultText);
 
       if (retryCount === 0) {
@@ -594,9 +746,9 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           id: Date.now().toString(),
           shortIdea: promptText || 'From Context/Upload',
           fullPrompt: resultText,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
-        saveHistory([newHistoryItem, ...history]);
+        saveHistory([newHistoryItem, ...history].slice(0, 100));
       }
       setIsLoading(false);
 
@@ -719,12 +871,29 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
         <div className="glass-panel main-panel">
           {!(showSettings || showHistory) && (
             <div className="panel-header" style={{ justifyContent: 'flex-end', borderBottom: 'none', paddingBottom: 0 }}>
-              <button className="icon-btn" onClick={() => setShowHistory(true)} title="Toggle History" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
-                <HistoryIcon size={20} />
-              </button>
-              <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
-                <Settings size={20} />
-              </button>
+              <div className="header-actions">
+                {userToken ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} color="#10b981" />} 
+                      {userEmail}
+                    </span>
+                    <button className="icon-btn" onClick={handleLogout} title="Sign Out" style={{ padding: '0.4rem', border: 'none', background: 'transparent', color: '#ef4444' }}>
+                      <LogOut size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <button className="icon-btn" onClick={() => setShowAuthModal(true)} title="Sign In" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
+                    <UserCircle size={20} />
+                  </button>
+                )}
+                <button className="icon-btn" onClick={() => setShowHistory(true)} title="History" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
+                  <HistoryIcon size={20} />
+                </button>
+                <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ padding: '0.4rem', border: 'none', background: 'transparent' }}>
+                  <Settings size={20} />
+                </button>
+              </div>
             </div>
           )}
 
@@ -774,21 +943,60 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                       fontSize: '0.9rem'
                     }}
                   >
-                    <option value="openrouter/free">Auto-Router (Best Available)</option>
-                    <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Meta)</option>
-                    <option value="google/gemma-4-31b-it:free">Gemma 4 31B (Google)</option>
-                    <option value="nvidia/nemotron-3-super-120b-a12b:free">Nemotron 3 120B (NVIDIA)</option>
+                    <option value="openrouter/free">OpenRouter Auto (Free)</option>
+                    <option value="google/gemini-pro">Gemini Pro 1.5</option>
+                    <option value="meta-llama/llama-3-8b-instruct">Llama 3 8B</option>
                   </select>
                 </div>
               )}
 
+              <div className="input-group" style={{ marginBottom: '1rem' }}>
+                <label>4-Digit PIN (Required for encryption)</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    type="password" 
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                    placeholder="Enter 4-digit PIN"
+                    style={{
+                      width: '120px',
+                      padding: '0.8rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--panel-border)',
+                      background: '#f9fafb',
+                      fontSize: '1.2rem',
+                      textAlign: 'center',
+                      letterSpacing: '0.5em'
+                    }}
+                    maxLength={4}
+                  />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                    <Lock size={14} style={{ marginRight: '4px' }} /> Your keys are AES-GCM encrypted in local storage using this PIN.
+                  </span>
+                </div>
+              </div>
+
               <div className="input-group">
-                <label>{apiProvider === 'google' ? 'Gemini API Key' : apiProvider === 'openrouter' ? 'OpenRouter API Key' : 'Groq API Key'}</label>
+                <label>API Key ({apiProvider === 'google' ? 'Google AI Studio' : apiProvider === 'openrouter' ? 'OpenRouter' : 'Groq'})</label>
+                {serverKeysAvailable && (
+                  <p style={{ fontSize: '0.8rem', color: '#16a34a', marginBottom: '0.5rem' }}>
+                    ✓ Server API keys configured — you can generate without entering your own key.
+                  </p>
+                )}
                 <input 
                   type="password" 
                   value={apiProvider === 'google' ? apiKey : apiProvider === 'openrouter' ? openRouterKey : groqKey}
                   onChange={(e) => saveApiKey(e.target.value)}
-                  placeholder={apiProvider === 'google' ? "AIzaSy..." : apiProvider === 'openrouter' ? "sk-or-v1-..." : "gsk_..."}
+                  placeholder={`Enter your ${apiProvider} API Key`}
+                  disabled={(!pin || pin.length < 4) && !serverKeysAvailable}
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--panel-border)',
+                    background: ((!pin || pin.length < 4) && !serverKeysAvailable) ? '#e5e7eb' : '#f9fafb',
+                    fontSize: '0.9rem'
+                  }}
                 />
                 {apiProvider === 'openrouter' && (
                   <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
@@ -815,7 +1023,12 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                   Back to Dashboard
                 </button>
               </div>
-              <h3 style={{ marginTop: 0 }}>Prompt History</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0 }}>Prompt History</h3>
+                <button className="generate-btn" onClick={handleExportCSV} disabled={history.length === 0} style={{ background: 'var(--panel-bg)', color: 'var(--text-main)', border: '1px solid var(--panel-border)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  <Download size={14} /> Export CSV
+                </button>
+              </div>
               {history.length === 0 ? (
                 <p className="empty-history">No prompts generated yet.</p>
               ) : (
@@ -836,9 +1049,14 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                       >
                         {item.fullPrompt}
                       </div>
-                      <button className="history-copy-btn" onClick={() => copyToClipboard(item.fullPrompt)} style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', background: '#f3f4f6', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                        Copy
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="history-copy-btn" onClick={() => handleSharePrompt(item.fullPrompt)} style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', background: '#f3f4f6', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Share2 size={12} /> Share
+                        </button>
+                        <button className="history-copy-btn" onClick={() => copyToClipboard(item.fullPrompt)} style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', background: '#f3f4f6', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Copy size={12} /> Copy
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1023,6 +1241,32 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
           {showAdvanced && (
             <div className="advanced-panel fade-in">
               <div className="input-group" style={{ marginBottom: '1.5rem' }}>
+                <label>Prompt Framework</label>
+                <select
+                  value={selectedFramework}
+                  onChange={(e) => setSelectedFramework(e.target.value)}
+                  className="style-dropdown"
+                >
+                  <option value="auto">Auto (best for category)</option>
+                  {PROMPT_FRAMEWORKS.map((fw) => (
+                    <option key={fw.id} value={fw.id}>
+                      {fw.name} — {fw.acronym.split(' · ').slice(0, 3).join(' · ')}…
+                    </option>
+                  ))}
+                </select>
+                {(() => {
+                  const fw = selectedFramework === 'auto'
+                    ? getRecommendedFramework(activeCategory)
+                    : PROMPT_FRAMEWORKS.find((f) => f.id === selectedFramework);
+                  return fw ? (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                      {fw.description} Sections: {fw.sections.map((s) => s.label).join(', ')}.
+                    </p>
+                  ) : null;
+                })()}
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '1.5rem' }}>
                 <label>Target LLM Platform</label>
                 <select 
                   value={targetPlatform}
@@ -1163,9 +1407,17 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
                 {(isLoading && !generatedPrompt.includes('⏳')) ? 'Crafting your legendary prompt...' : generatedPrompt}
               </div>
               {!isLoading && generatedPrompt && !generatedPrompt.includes('⏳') && (
-                <button className="copy-btn" onClick={() => copyToClipboard(generatedPrompt)} title="Copy to clipboard">
-                  {copied ? <Check size={18} color="#4ade80" /> : <Copy size={18} />}
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end', marginTop: '1rem' }}>
+                  <button className="copy-btn" onClick={() => handleSharePrompt(generatedPrompt)} disabled={isSharing} title="Share via Link" style={{ display: 'flex', gap: '0.5rem', width: 'auto', padding: '0.5rem 1rem' }}>
+                    {isSharing ? <Loader2 size={16} className="animate-spin" /> : <><Share2 size={16} /> Share</>}
+                  </button>
+                  <button className="copy-btn" onClick={() => setShowPromptTester(true)} title="Test this prompt live" style={{ display: 'flex', gap: '0.5rem', width: 'auto', padding: '0.5rem 1rem' }}>
+                    <MessageSquare size={16} /> Test Prompt
+                  </button>
+                  <button className="copy-btn" onClick={() => copyToClipboard(generatedPrompt)} title="Copy to clipboard">
+                    {copied ? <Check size={18} color="#4ade80" /> : <Copy size={18} />}
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -1187,13 +1439,89 @@ Do not include any pleasantries or conversational filler. Output ONLY the genera
             <div className="modal-body">
               {selectedHistoryItem.fullPrompt}
             </div>
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <button className="generate-btn" onClick={() => { 
+                setGeneratedPrompt(selectedHistoryItem.fullPrompt);
+                setShowPromptTester(true);
+                setSelectedHistoryItem(null); 
+              }} style={{ background: 'var(--panel-bg)', color: 'var(--text-main)' }}>
+                <MessageSquare size={16} /> Test
+              </button>
               <button className="generate-btn" onClick={() => { copyToClipboard(selectedHistoryItem.fullPrompt); setSelectedHistoryItem(null); }}>
                 <Copy size={16} /> Copy Prompt
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {isLocked && (
+        <div className="modal-overlay">
+          <div className="modal-content fade-in" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <Lock size={48} style={{ color: 'var(--accent)', margin: '0 auto', display: 'block' }} />
+              <h2 style={{ marginTop: '1rem' }}>App Locked</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Enter your 4-digit PIN to decrypt your API keys.</p>
+            </div>
+            <input 
+              type="password" 
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+              onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+              placeholder="••••"
+              style={{
+                width: '100%',
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '1px solid var(--panel-border)',
+                fontSize: '2rem',
+                textAlign: 'center',
+                letterSpacing: '0.5em',
+                marginBottom: '1rem'
+              }}
+              autoFocus
+            />
+            {pinError && <p style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '1rem' }}>{pinError}</p>}
+            <button 
+              className="generate-btn surprise-btn"
+              onClick={handleUnlock}
+              disabled={pin.length !== 4}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              <Unlock size={18} style={{ marginRight: '0.5rem' }} /> Unlock
+            </button>
+            <button 
+              onClick={() => {
+                localStorage.removeItem('prompt_crafter_gemini_key');
+                localStorage.removeItem('prompt_crafter_or_key');
+                localStorage.removeItem('prompt_crafter_groq_key');
+                setIsLocked(false);
+                setPin('');
+                setShowSettings(true);
+              }}
+              style={{ marginTop: '1rem', background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}
+            >
+              Reset Keys
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPromptTester && generatedPrompt && (
+        <PromptTester 
+          systemPrompt={generatedPrompt} 
+          onClose={() => setShowPromptTester(false)}
+          apiProvider={apiProvider}
+          geminiKey={apiKey}
+          groqKey={groqKey}
+          openRouterKey={openRouterKey}
+        />
+      )}
+      {showAuthModal && (
+        <AuthModal 
+          onClose={() => setShowAuthModal(false)} 
+          onSuccess={handleAuthSuccess}
+        />
       )}
     </div>
   );
